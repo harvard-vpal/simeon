@@ -2,8 +2,10 @@
 simeon is a command line tool that helps with processing edx data
 """
 import glob
+import json
 import multiprocessing as mp
 import os
+import re
 import signal
 import sys
 import traceback
@@ -211,6 +213,40 @@ def split_sql_files(parsed_args):
                 tables_only=parsed_args.tables_only,
                 debug=parsed_args.debug,
             )
+
+            if hasattr(parsed_args, 'ignore_files'):
+                # load from provided JSON string
+                ignore_files = json.loads(parsed_args.ignore_files)
+                ignore_paths = set()
+
+                # `to_decrypt` values are absolute paths to .gpg files
+                base_path = os.path.split(list(to_decrypt)[0])[0]
+                base_path = re.sub(r"\/ora$", "", base_path)
+                base_path = os.path.split(base_path)[0]
+
+                for course_id, filenames in ignore_files.items():
+                    # construct value that might be found in `to_decrypt`
+                    course_folder_name = course_id.replace('/', '__')
+                    ignore_paths.update(
+                        [
+                            os.path.join(base_path, course_folder_name, f"{x}.gpg")
+                            for x in filenames
+                        ]
+                    )
+
+                matching_ignore_paths = list(ignore_paths.intersection(to_decrypt))
+                nonmatching_ignore_paths = list(ignore_paths.difference(to_decrypt))
+
+                if len(matching_ignore_paths) > 0:
+                    parsed_args.logger.info(f"Ignoring files: {matching_ignore_paths}")
+                if len(nonmatching_ignore_paths) > 0:
+                    parsed_args.logger.warning(
+                        f"Ignorable files not found: {nonmatching_ignore_paths}"
+                    )
+
+                # remove ignorable files
+                to_decrypt = to_decrypt - ignore_paths
+
             if not to_decrypt:
                 errmsg = (
                     'No files extracted while splitting the '
@@ -1259,6 +1295,14 @@ def main():
         'downloaded_files',
         help='List of tracking log or SQL archives to split',
         nargs='+',
+    )
+    splitter.add_argument(
+        '--ignore-files',
+        help=(
+            'JSON string indicating files to ignore (after splitting) for '
+            'specific courses (e.g. \'{"CourseID": ["ex.sql"]}\')'
+        ),
+        dest='ignore_files'
     )
     splitter.add_argument(
         '--file-type', '-f',

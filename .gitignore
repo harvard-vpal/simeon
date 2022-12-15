@@ -155,3 +155,5 @@ logs/
 .simeon.cfg
 simeon.ini
 .simeon.ini
+
+.idea/
