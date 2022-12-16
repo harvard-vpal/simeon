@@ -238,8 +238,11 @@ def split_sql_files(parsed_args):
                 nonmatching_ignore_paths = list(ignore_paths.difference(to_decrypt))
 
                 if len(matching_ignore_paths) > 0:
-                    parsed_args.logger.info(f"Ignoring files: {matching_ignore_paths}")
+                    matching_ignore_paths.sort()
+                    parsed_args.logger.info(f"Deleting files: {matching_ignore_paths}")
+                    sqls.force_delete_files(matching_ignore_paths)
                 if len(nonmatching_ignore_paths) > 0:
+                    nonmatching_ignore_paths.sort()
                     parsed_args.logger.warning(
                         f"Ignorable files not found: {nonmatching_ignore_paths}"
                     )
