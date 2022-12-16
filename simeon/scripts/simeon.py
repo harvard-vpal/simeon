@@ -216,12 +216,12 @@ def split_sql_files(parsed_args):
 
             if hasattr(parsed_args, 'ignore_files'):
                 # load from provided JSON string
-                ignore_files = json.loads(parsed_args.ignore_files)
+                ignore_files = json.load(open(parsed_args.ignore_files, 'r'))
                 ignore_paths = set()
 
                 # `to_decrypt` values are absolute paths to .gpg files
                 base_path = os.path.split(list(to_decrypt)[0])[0]
-                base_path = re.sub(r"\/ora$", "", base_path)
+                base_path = re.sub(r"/ora$", "", base_path)
                 base_path = os.path.split(base_path)[0]
 
                 for course_id, filenames in ignore_files.items():
@@ -1302,7 +1302,7 @@ def main():
     splitter.add_argument(
         '--ignore-files',
         help=(
-            'JSON string indicating files to ignore (after splitting) for '
+            'Path to JSON file indicating files to ignore+delete (after splitting) for '
             'specific courses (e.g. \'{"CourseID": ["ex.sql"]}\')'
         ),
         dest='ignore_files'
