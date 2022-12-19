@@ -214,42 +214,6 @@ def split_sql_files(parsed_args):
                 debug=parsed_args.debug,
             )
 
-            if hasattr(parsed_args, 'ignore_files'):
-                # load from provided JSON string
-                ignore_files = json.load(open(parsed_args.ignore_files, 'r'))
-                ignore_paths = set()
-
-                # `to_decrypt` values are absolute paths to .gpg files
-                base_path = os.path.split(list(to_decrypt)[0])[0]
-                base_path = re.sub(r"/ora$", "", base_path)
-                base_path = os.path.split(base_path)[0]
-
-                for course_id, filenames in ignore_files.items():
-                    # construct value that might be found in `to_decrypt`
-                    course_folder_name = course_id.replace('/', '__')
-                    ignore_paths.update(
-                        [
-                            os.path.join(base_path, course_folder_name, f"{x}.gpg")
-                            for x in filenames
-                        ]
-                    )
-
-                matching_ignore_paths = list(ignore_paths.intersection(to_decrypt))
-                nonmatching_ignore_paths = list(ignore_paths.difference(to_decrypt))
-
-                if len(matching_ignore_paths) > 0:
-                    matching_ignore_paths.sort()
-                    parsed_args.logger.info(f"Deleting files: {matching_ignore_paths}")
-                    sqls.force_delete_files(matching_ignore_paths)
-                if len(nonmatching_ignore_paths) > 0:
-                    nonmatching_ignore_paths.sort()
-                    parsed_args.logger.warning(
-                        f"Ignorable files not found: {nonmatching_ignore_paths}"
-                    )
-
-                # remove ignorable files
-                to_decrypt = to_decrypt - ignore_paths
-
             if not to_decrypt:
                 errmsg = (
                     'No files extracted while splitting the '
@@ -270,18 +234,18 @@ def split_sql_files(parsed_args):
                 parsed_args.logger.info(
                     msg.format(f=fname, w='Decrypting the contents in')
                 )
-                try:
-                    sqls.batch_decrypt_files(
-                        all_files=to_decrypt, size=parsed_args.decryption_batch,
-                        verbose=parsed_args.verbose, logger=parsed_args.logger,
-                        timeout=parsed_args.decryption_timeout,
-                        keepfiles=parsed_args.keep_encrypted,
-                        njobs=parsed_args.jobs,
-                    )
-                except Exception as excp:
-                    if parsed_args.fail_fast:
-                        raise excp
-                    parsed_args.logger.error(excp)
+                # try:
+                sqls.batch_decrypt_files(
+                    all_files=to_decrypt, size=parsed_args.decryption_batch,
+                    verbose=parsed_args.verbose, logger=parsed_args.logger,
+                    timeout=parsed_args.decryption_timeout,
+                    keepfiles=parsed_args.keep_encrypted,
+                    njobs=parsed_args.jobs,
+                )
+                # except Exception as excp:
+                #     if parsed_args.fail_fast:
+                #         raise excp
+                #     parsed_args.logger.error(excp)
                 parsed_args.logger.info(
                     msg.format(f=fname, w='Done decrypting the contents in')
                 )
@@ -291,6 +255,46 @@ def split_sql_files(parsed_args):
             dirnames = set(
                 os.path.dirname(f) for f in to_decrypt if orapth not in f
             )
+
+            if hasattr(parsed_args, 'ignore_files'):
+                # load from provided JSON string
+                ignore_files = json.load(open(parsed_args.ignore_files, 'r'))
+
+                # `to_decrypt` values are absolute paths to .gpg files
+                base_path = os.path.split(list(to_decrypt)[0])[0]
+                base_path = re.sub(r"/ora$", "", base_path)
+                base_path = os.path.split(base_path)[0]
+
+                existing_ignore_files = set()
+                nonexisting_ignore_files = set()
+
+                for course_id, filenames in ignore_files.items():
+                    # construct value that might be found in `to_decrypt`
+                    course_folder_name = course_id.replace('/', '__')
+
+                    for fn in filenames:
+                        fqfn = os.path.join(base_path, course_folder_name, fn)
+
+                        if os.path.exists(fqfn):
+                            existing_ignore_files.add(fqfn)
+                        else:
+                            nonexisting_ignore_files.add(fqfn)
+
+                if len(existing_ignore_files) > 0:
+                    existing_ignore_files=list(existing_ignore_files)
+                    existing_ignore_files.sort()
+                    parsed_args.logger.info(f"Emptying files: {existing_ignore_files}")
+
+                    for fqfn in existing_ignore_files:
+                        open(fqfn, 'w').close()
+
+                if len(nonexisting_ignore_files) > 0:
+                    nonexisting_ignore_files=list(nonexisting_ignore_files)
+                    nonexisting_ignore_files.sort()
+                    parsed_args.logger.warning(
+                        f"Ignorable files not found: {nonexisting_ignore_files}"
+                    )
+
             parsed_args.logger.info('Making reports from course SQL files')
             if len(dirnames) == 1:
                 make_sql_tables = make_sql_tables_seq
