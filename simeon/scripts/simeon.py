@@ -25,6 +25,7 @@ from simeon.report import (
 )
 from simeon.scripts import utilities as cli_utils
 from simeon.upload import gcp
+import pathlib
 
 # Global logger variable for signal handlers
 logger = None
@@ -234,18 +235,18 @@ def split_sql_files(parsed_args):
                 parsed_args.logger.info(
                     msg.format(f=fname, w='Decrypting the contents in')
                 )
-                # try:
-                sqls.batch_decrypt_files(
-                    all_files=to_decrypt, size=parsed_args.decryption_batch,
-                    verbose=parsed_args.verbose, logger=parsed_args.logger,
-                    timeout=parsed_args.decryption_timeout,
-                    keepfiles=parsed_args.keep_encrypted,
-                    njobs=parsed_args.jobs,
-                )
-                # except Exception as excp:
-                #     if parsed_args.fail_fast:
-                #         raise excp
-                #     parsed_args.logger.error(excp)
+                try:
+                    sqls.batch_decrypt_files(
+                        all_files=to_decrypt, size=parsed_args.decryption_batch,
+                        verbose=parsed_args.verbose, logger=parsed_args.logger,
+                        timeout=parsed_args.decryption_timeout,
+                        keepfiles=parsed_args.keep_encrypted,
+                        njobs=parsed_args.jobs,
+                    )
+                except Exception as excp:
+                    if parsed_args.fail_fast:
+                        raise excp
+                    parsed_args.logger.error(excp)
                 parsed_args.logger.info(
                     msg.format(f=fname, w='Done decrypting the contents in')
                 )
@@ -261,9 +262,7 @@ def split_sql_files(parsed_args):
                 ignore_files = json.load(open(parsed_args.ignore_files, 'r'))
 
                 # `to_decrypt` values are absolute paths to .gpg files
-                base_path = os.path.split(list(to_decrypt)[0])[0]
-                base_path = re.sub(r"/ora$", "", base_path)
-                base_path = os.path.split(base_path)[0]
+                base_path = os.path.split(list(dirnames)[0])[0]
 
                 existing_ignore_files = set()
                 nonexisting_ignore_files = set()
@@ -281,12 +280,22 @@ def split_sql_files(parsed_args):
                             nonexisting_ignore_files.add(fqfn)
 
                 if len(existing_ignore_files) > 0:
-                    existing_ignore_files=list(existing_ignore_files)
+                    existing_ignore_files = list(existing_ignore_files)
                     existing_ignore_files.sort()
                     parsed_args.logger.info(f"Emptying files: {existing_ignore_files}")
 
                     for fqfn in existing_ignore_files:
-                        open(fqfn, 'w').close()
+                        fext = pathlib.Path(fqfn).suffix
+
+                        if fext == '.sql':
+                            # these are actually CSV-like, so keep only first row
+                            with open(fqfn) as f:
+                                first_line = f.readline()
+                            with open(fqfn, 'w') as f:
+                                f.writelines(first_line)
+                        else:
+                            # just blank out the file
+                            open(fqfn, 'w').close()
 
                 if len(nonexisting_ignore_files) > 0:
                     nonexisting_ignore_files=list(nonexisting_ignore_files)
