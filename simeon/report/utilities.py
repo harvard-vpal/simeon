@@ -1241,8 +1241,8 @@ def make_sql_tables_seq(
     :param debug: Show the stacktrace that caused the error
     :type schema_dir: str
     :param schema_dir: The directory where schema files live
-    :rtype: bool
-    :return: True if the files are generated, and False otherwise.
+    :rtype: List[Dict[str, str]]
+    :return: list of dictionaries of failed files
     """
     schema_dir = schema_dir or SCHEMA_DIR
     reports = (
@@ -1274,13 +1274,13 @@ def make_sql_tables_seq(
                 ))
                 if fail_fast:
                     raise excp from None
-                fails.append(excp)
+                fails.append({'dirname': dirname, 'table': tbl, 'e': excp})
                 _delete_incomplete_matches(dirname, tbl)
         if verbose and logger is not None:
             for failure in fails:
-                logger.error(failure)
+                logger.error(failure['e'])
             logger.info('Done processing files in {d}'.format(d=dirname))
-    return not bool(fails)
+    return fails
 
 
 def make_sql_tables_par(
@@ -1305,8 +1305,8 @@ def make_sql_tables_par(
     :param debug: Show the stacktrace that caused the error
     :type schema_dir: str
     :param schema_dir: The directory where schema files live
-    :rtype: bool
-    :return: True if the files are generated, and False otherwise.
+    :rtype: List[Dict[str, str]]
+    :return: list of dictionaries of failed files
     """
     schema_dir = schema_dir or SCHEMA_DIR
     reports = (
@@ -1352,14 +1352,14 @@ def make_sql_tables_par(
                 ))
                 if fail_fast:
                     raise excp from None
-                fails.append(excp)
+                fails.append({'dirname': dirname, 'table': tbl, 'e': excp})
                 _delete_incomplete_matches(dirname, tbl)
     if verbose and logger is not None:
         for failure in fails:
-            logger.error(failure)
+            logger.error(failure['e'])
         for dirname in dirnames:
             logger.info('Done processing files in {d}'.format(d=dirname))
-    return not bool(fails)
+    return fails
 
 
 def make_table_from_sql(

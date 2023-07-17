@@ -5,12 +5,12 @@ import glob
 import json
 import multiprocessing as mp
 import os
-import re
+import shutil
 import signal
 import sys
 import traceback
 from argparse import (
-    ArgumentParser, FileType, RawDescriptionHelpFormatter
+    FileType, RawDescriptionHelpFormatter
 )
 
 import simeon
@@ -310,12 +310,18 @@ def split_sql_files(parsed_args):
             else:
                 make_sql_tables = make_sql_tables_par
             try:
-                rc = make_sql_tables(
+                failures = make_sql_tables(
                     dirnames=dirnames, verbose=parsed_args.verbose,
                     logger=parsed_args.logger, fail_fast=parsed_args.fail_fast,
                     debug=parsed_args.debug, schema_dir=parsed_args.schema_dir,
                 )
-                failed = not rc
+                failed = len(failures) > 0
+
+                if failed and hasattr(parsed_args, 'allow_failures'):
+                    for failure in failures:
+                        parsed_args.logger.info(f"Removing {failure['dirname']}")
+                        shutil.rmtree(failure['dirname'])
+                    failed = False
             except Exception as excp:
                 if parsed_args.fail_fast:
                     raise excp
@@ -921,11 +927,10 @@ def make_secondary_tables(parsed_args):
                     context.update(context_info)
                 msg = 'Making {t} for {c} failed with the following: {e}'
                 parsed_args.logger.error(
-                    msg.format(t=table, c=course_id, e=error_msg),
-                    context_dict=context,
+                    msg.format(t=table, c=course_id, e=error_msg)
                 )
                 errors += 1
-    if errors:
+    if errors and not hasattr(parsed_args, 'allow_failures'):
         sys.exit(1)
     if parsed_args.wait_for_loads:
         if num_queries > 1:
@@ -1345,6 +1350,11 @@ def main():
         type=int,
     )
     splitter.add_argument(
+        '--allow-failures',
+        help='Delete course directories that had file split failures',
+        action='store_true',
+    )
+    splitter.add_argument(
         '--include-edge', '-E',
         help='Include the edge site files when splitting SQL data packages.',
         action='store_true',
@@ -1620,6 +1630,11 @@ def main():
             'The directory where SQL query files live. '
             'Default: {d}'.format(d=QUERY_DIR)
         ),
+    )
+    reporter.add_argument(
+        '--allow-failures',
+        help='Delete course directories that had file split failures',
+        action='store_true',
     )
     reporter.add_argument(
         '--schema-dir', '-R',
